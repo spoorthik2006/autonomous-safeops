@@ -1,0 +1,40 @@
+id: "rb-db-pool-reset"
+name: "Database Connection Pool Reset"
+description: "Drains leaked idle connections and resets client connection pooler. Tier 2 requires human approval."
+risk_tier: 2
+blast_radius:
+  max_hosts: 1
+  service_scope: "database-cluster"
+required_credential_scope: "db:pool_reset"
+trigger_conditions:
+  metric: "db_pool_utilization_pct"
+  operator: ">"
+  threshold: 92.0
+diagnostic_checks:
+  - id: "diag-check-locks"
+    name: "Check for Long-Running Exclusive Row Locks"
+    command: "check_db_active_locks"
+    expected_result: "exclusive_lock_count == 0"
+action_steps:
+  - step: 1
+    name: "Snapshot active pool metrics and client connection handles"
+    action: "snapshot_state"
+    target: "db_connection_pool"
+  - step: 2
+    name: "Terminate idle-in-transaction connections older than 180 seconds"
+    action: "terminate_idle_connections"
+    target: "db_connection_pool"
+  - step: 3
+    name: "Recycle pool worker allocation and warm up 10 baseline connections"
+    action: "recycle_pool"
+    target: "db_connection_pool"
+  - step: 4
+    name: "Verify active pool utilization drops below 40% and queries execute normally"
+    action: "verify_metric"
+    metric: "db_pool_utilization_pct"
+    target_value: "< 40.0"
+rollback_steps:
+  - step: 1
+    name: "Restore previous pool concurrency limits from snapshot"
+    action: "restore_snapshot"
+    target: "db_connection_pool"

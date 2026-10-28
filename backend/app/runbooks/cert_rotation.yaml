@@ -1,0 +1,40 @@
+id: "rb-cert-rotation"
+name: "TLS Certificate Rotation"
+description: "Rotates expiring SSL/TLS certificates before expiry. High impact - requires human approval."
+risk_tier: 2
+blast_radius:
+  max_hosts: 1
+  service_scope: "api-gateway"
+required_credential_scope: "cert:rotate"
+trigger_conditions:
+  metric: "cert_days_remaining"
+  operator: "<"
+  threshold: 14
+diagnostic_checks:
+  - id: "diag-cert-expiry"
+    name: "Validate TLS Ingress Certificate Expiration Timestamp"
+    command: "inspect_cert_chain"
+    expected_result: "days_remaining < 14"
+action_steps:
+  - step: 1
+    name: "Snapshot active TLS certificate and key bundle"
+    action: "snapshot_state"
+    target: "tls_certificate"
+  - step: 2
+    name: "Issue new 90-day TLS certificate from internal PKI"
+    action: "generate_cert"
+    target: "tls_certificate"
+  - step: 3
+    name: "Deploy new certificate bundle to API Ingress and trigger graceful reload"
+    action: "reload_ingress_tls"
+    target: "api-gateway"
+  - step: 4
+    name: "Verify HTTPS handshake and cipher negotiation on port 443"
+    action: "verify_metric"
+    metric: "tls_handshake_status"
+    target_value: "SUCCESS"
+rollback_steps:
+  - step: 1
+    name: "Revert Ingress TLS bundle to snapshot certificate and reload listener"
+    action: "restore_snapshot"
+    target: "tls_certificate"

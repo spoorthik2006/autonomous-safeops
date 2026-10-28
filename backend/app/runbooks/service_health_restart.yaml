@@ -1,0 +1,36 @@
+id: "rb-service-restart"
+name: "Service Health Rolling Restart"
+description: "Rolling restart of degraded HTTP microservice when 5xx error rate exceeds safety limit. Tier 2 requires human approval."
+risk_tier: 2
+blast_radius:
+  max_hosts: 2
+  service_scope: "api-gateway"
+required_credential_scope: "service:restart"
+trigger_conditions:
+  metric: "http_5xx_rate_pct"
+  operator: ">"
+  threshold: 15.0
+diagnostic_checks:
+  - id: "diag-check-upstream"
+    name: "Check Upstream Dependency Health and Circuit Breakers"
+    command: "check_upstream_health"
+    expected_result: "upstreams_healthy == true"
+action_steps:
+  - step: 1
+    name: "Snapshot service deployment configuration"
+    action: "snapshot_state"
+    target: "service_deployment"
+  - step: 2
+    name: "Perform sequential rolling container restart with health probe checks"
+    action: "rolling_restart"
+    target: "service_deployment"
+  - step: 3
+    name: "Verify service latency p95 < 200ms and 5xx error rate < 1%"
+    action: "verify_metric"
+    metric: "http_5xx_rate_pct"
+    target_value: "< 1.0"
+rollback_steps:
+  - step: 1
+    name: "Rollback deployment spec to snapshot revision"
+    action: "restore_snapshot"
+    target: "service_deployment"

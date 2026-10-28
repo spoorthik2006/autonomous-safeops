@@ -1,0 +1,39 @@
+id: "rb-disk-full"
+name: "Disk Full Triage & Remediation"
+description: "Diagnose disk saturation, rotate logs if cause is routine logs; escalate if core dumps or unclassified"
+risk_tier: 1
+blast_radius:
+  max_hosts: 1
+  service_scope: "host-system"
+required_credential_scope: "disk:clean_logs"
+trigger_conditions:
+  metric: "disk_utilization_pct"
+  operator: ">"
+  threshold: 85.0
+diagnostic_checks:
+  - id: "diag-check-cause"
+    name: "Identify Disk Space Consumer"
+    command: "analyze_disk_usage"
+    expected_result: "cause in ['logs', 'core_dump', 'unknown']"
+action_steps:
+  - step: 1
+    name: "Snapshot active log directory state"
+    action: "snapshot_state"
+    target: "/var/log"
+  - step: 2
+    name: "Rotate and compress /var/log/*.log files older than 24 hours"
+    action: "clean_logs"
+    target: "/var/log"
+    parameters:
+      compress: true
+      retention_days: 1
+  - step: 3
+    name: "Verify disk utilization dropped below 75%"
+    action: "verify_metric"
+    metric: "disk_utilization_pct"
+    target_value: "< 75.0"
+rollback_steps:
+  - step: 1
+    name: "Restore archived logs from snapshot"
+    action: "restore_snapshot"
+    target: "/var/log"

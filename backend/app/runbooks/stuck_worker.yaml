@@ -1,0 +1,40 @@
+id: "rb-stuck-worker"
+name: "Stuck Worker Restart"
+description: "Detects hung or unresponsive background worker, snapshots PID/state, terminates gracefully and restarts"
+risk_tier: 1
+blast_radius:
+  max_hosts: 1
+  service_scope: "worker-cluster"
+required_credential_scope: "worker:restart"
+trigger_conditions:
+  metric: "worker_heartbeat_age_sec"
+  operator: ">"
+  threshold: 60.0
+diagnostic_checks:
+  - id: "diag-worker-liveness"
+    name: "Check Worker PID and Process Responsiveness"
+    command: "check_worker_status"
+    expected_result: "status == 'UNRESPONSIVE'"
+action_steps:
+  - step: 1
+    name: "Snapshot worker state and queue position"
+    action: "snapshot_state"
+    target: "worker_process"
+  - step: 2
+    name: "Signal worker shutdown (SIGTERM with 5s timeout, SIGKILL fallback)"
+    action: "terminate_worker"
+    target: "worker_process"
+  - step: 3
+    name: "Spawn new worker process instance"
+    action: "start_worker"
+    target: "worker_process"
+  - step: 4
+    name: "Verify worker heartbeat restored and processing tasks"
+    action: "verify_metric"
+    metric: "worker_status"
+    target_value: "HEALTHY"
+rollback_steps:
+  - step: 1
+    name: "Restore worker state snapshot and restart original process supervisor"
+    action: "restore_snapshot"
+    target: "worker_process"

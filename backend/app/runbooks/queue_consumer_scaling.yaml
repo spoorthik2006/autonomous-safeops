@@ -1,0 +1,38 @@
+id: "rb-queue-scaling"
+name: "Queue Consumer Scaling"
+description: "Autoscale message queue consumers when backlog exceeds throughput limits"
+risk_tier: 1
+blast_radius:
+  max_hosts: 2
+  service_scope: "queue-consumer"
+required_credential_scope: "queue:scale"
+trigger_conditions:
+  metric: "queue_depth"
+  operator: ">"
+  threshold: 5000
+diagnostic_checks:
+  - id: "diag-queue-depth"
+    name: "Confirm Message Backlog & Consumer Worker Pool Health"
+    command: "check_queue_backlog"
+    expected_result: "queue_depth > 5000"
+action_steps:
+  - step: 1
+    name: "Snapshot active consumer replica count"
+    action: "snapshot_state"
+    target: "queue_replicas"
+  - step: 2
+    name: "Scale consumer replica count from 2 to 6"
+    action: "scale_consumers"
+    target: "queue_replicas"
+    parameters:
+      target_replicas: 6
+  - step: 3
+    name: "Verify queue draining rate > 200 msgs/sec and lag dropping"
+    action: "verify_metric"
+    metric: "queue_drain_rate"
+    target_value: "> 200"
+rollback_steps:
+  - step: 1
+    name: "Restore previous replica count (2)"
+    action: "restore_snapshot"
+    target: "queue_replicas"

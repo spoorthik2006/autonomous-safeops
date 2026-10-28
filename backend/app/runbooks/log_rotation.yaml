@@ -1,0 +1,36 @@
+id: "rb-log-rotation"
+name: "Scheduled Log Rotation"
+description: "Routine log file rotation and gzip compression when log file size exceeds 500MB"
+risk_tier: 0
+blast_radius:
+  max_hosts: 1
+  service_scope: "host-system"
+required_credential_scope: "disk:clean_logs"
+trigger_conditions:
+  metric: "active_log_size_mb"
+  operator: ">"
+  threshold: 500
+diagnostic_checks:
+  - id: "diag-log-size"
+    name: "Check Active Application Log File Size"
+    command: "check_log_file_size"
+    expected_result: "size_mb > 500"
+action_steps:
+  - step: 1
+    name: "Snapshot log directory metadata"
+    action: "snapshot_state"
+    target: "/var/log/apps"
+  - step: 2
+    name: "Copy-truncate active log file and compress rotated segment"
+    action: "copytruncate_logs"
+    target: "/var/log/apps"
+  - step: 3
+    name: "Verify active log file size reset and process logging uninterrupted"
+    action: "verify_metric"
+    metric: "active_log_size_mb"
+    target_value: "< 50"
+rollback_steps:
+  - step: 1
+    name: "Uncompress latest segment and append back to active stream"
+    action: "restore_snapshot"
+    target: "/var/log/apps"

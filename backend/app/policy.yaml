@@ -1,0 +1,60 @@
+version: "1.0"
+name: "NightShift Global Safety Policy"
+description: "Policy governance and blast-radius rules for automated remediations"
+
+tiers:
+  tier_0:
+    name: "Autonomous Safe"
+    approval_required: false
+    rate_limit_per_hour: 20
+    description: "Routine low-impact actions that cannot degrade service availability (e.g. log rotation, zombie reaping)"
+  tier_1:
+    name: "Autonomous Rate-Limited"
+    approval_required: false
+    rate_limit_per_hour: 5
+    description: "State-altering actions with rate limiting and automated alerts (e.g. worker restart, consumer scaling, cache flush)"
+  tier_2:
+    name: "Human Approval Required"
+    approval_required: true
+    rate_limit_per_hour: 3
+    description: "High-impact actions requiring human review, risk evaluation, and explicit rollback plan sign-off"
+  tier_3:
+    name: "Protected / Strict Deny"
+    approval_required: false
+    action: "DENY"
+    description: "Strictly protected paths, production databases, and irreversible operational actions that must NEVER be automated"
+
+blast_radius:
+  max_hosts_per_action: 2
+  max_actions_per_hour_per_service: 5
+  cooldown_seconds_between_actions: 15
+
+protected_targets:
+  paths:
+    - "/etc"
+    - "/etc/*"
+    - "/boot"
+    - "/boot/*"
+    - "/data/core"
+    - "/data/core/*"
+    - "/*core*"
+  services:
+    - "prod-db-primary"
+    - "auth-hsm"
+    - "vault-cluster"
+
+judgment_rules:
+  disk_full:
+    cause_rules:
+      - condition: "cause == 'logs' and path.startswith('/var/log')"
+        decision: "ALLOW"
+        tier: 0
+        reason: "Disk saturation attributed to rotation-eligible logs in /var/log. Safe to auto-remediate."
+      - condition: "cause == 'core_dump' or path.startswith('/data/core')"
+        decision: "ESCALATE"
+        tier: 3
+        reason: "Disk saturation caused by core dumps. Deleting core dumps destroys diagnostic evidence of underlying crash. Requires human ops/dev intervention."
+      - condition: "cause == 'unknown'"
+        decision: "ESCALATE"
+        tier: 2
+        reason: "Unclassified root cause for disk saturation. Ambiguous condition - never guess or run destructive cleanup blindly."

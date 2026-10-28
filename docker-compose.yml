@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  nightshift-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nightshift-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - nightshift-data:/app/backend/data
+    restart: unless-stopped
+
+  nightshift-frontend:
+    image: node:20-alpine
+    container_name: nightshift-frontend
+    working_dir: /app
+    volumes:
+      - ./frontend:/app
+    ports:
+      - "5173:5173"
+    command: sh -c "npm install && npm run dev -- --host"
+    depends_on:
+      - nightshift-backend
+    restart: unless-stopped
+
+volumes:
+  nightshift-data:

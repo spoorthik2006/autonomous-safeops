@@ -1,0 +1,40 @@
+id: "rb-failed-cron-retry"
+name: "Failed Cron Retry"
+description: "Idempotent re-execution of failed cron job with lock release and jittered backoff"
+risk_tier: 1
+blast_radius:
+  max_hosts: 1
+  service_scope: "cron-scheduler"
+required_credential_scope: "cron:retry"
+trigger_conditions:
+  metric: "cron_failure_count"
+  operator: ">"
+  threshold: 0
+diagnostic_checks:
+  - id: "diag-cron-idempotency"
+    name: "Check Stale Mutex Lock and Idempotency Key"
+    command: "check_cron_lock"
+    expected_result: "can_retry == true"
+action_steps:
+  - step: 1
+    name: "Snapshot failed job state and exit code"
+    action: "snapshot_state"
+    target: "cron_job"
+  - step: 2
+    name: "Clear orphaned execution lock"
+    action: "release_cron_lock"
+    target: "cron_job"
+  - step: 3
+    name: "Trigger single retry execution with idempotency nonce"
+    action: "execute_cron_job"
+    target: "cron_job"
+  - step: 4
+    name: "Verify cron job completed with exit code 0"
+    action: "verify_metric"
+    metric: "cron_last_exit_code"
+    target_value: "== 0"
+rollback_steps:
+  - step: 1
+    name: "Re-assert lock and mark job as quarantined for manual review"
+    action: "restore_snapshot"
+    target: "cron_job"

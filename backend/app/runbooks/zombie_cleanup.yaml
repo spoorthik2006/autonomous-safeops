@@ -1,0 +1,36 @@
+id: "rb-zombie-cleanup"
+name: "Zombie Process Cleanup"
+description: "Reaps defunct child processes whose parents failed to wait for termination"
+risk_tier: 0
+blast_radius:
+  max_hosts: 1
+  service_scope: "host-system"
+required_credential_scope: "process:reap"
+trigger_conditions:
+  metric: "zombie_process_count"
+  operator: ">"
+  threshold: 10
+diagnostic_checks:
+  - id: "diag-check-zombies"
+    name: "Identify Defunct Processes and Parent PID"
+    command: "find_zombie_pids"
+    expected_result: "zombie_count > 10"
+action_steps:
+  - step: 1
+    name: "Snapshot process tree table"
+    action: "snapshot_state"
+    target: "process_table"
+  - step: 2
+    name: "Send SIGCHLD to parent process supervisor to trigger waitpid reap"
+    action: "reap_zombies"
+    target: "process_table"
+  - step: 3
+    name: "Verify zombie process count is 0"
+    action: "verify_metric"
+    metric: "zombie_process_count"
+    target_value: "== 0"
+rollback_steps:
+  - step: 1
+    name: "Log supervisor status and notify ops channel"
+    action: "restore_snapshot"
+    target: "process_table"

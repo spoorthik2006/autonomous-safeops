@@ -1,0 +1,42 @@
+id: "rb-cache-flush"
+name: "Safe Cache Flush"
+description: "Flushes fragmented or corrupted cache keys with rate-limiting to prevent thundering herds"
+risk_tier: 1
+blast_radius:
+  max_hosts: 1
+  service_scope: "cache-cluster"
+required_credential_scope: "cache:flush"
+trigger_conditions:
+  metric: "cache_fragmentation_pct"
+  operator: ">"
+  threshold: 60.0
+diagnostic_checks:
+  - id: "diag-db-capacity"
+    name: "Verify Downstream Database Replica Read Latency"
+    command: "check_db_replica_latency"
+    expected_result: "latency_ms < 50"
+action_steps:
+  - step: 1
+    name: "Snapshot active cache stats and key distribution"
+    action: "snapshot_state"
+    target: "cache_instance"
+  - step: 2
+    name: "Trigger async rate-limited eviction across volatile keyspace"
+    action: "flush_cache_keys"
+    target: "cache_instance"
+    parameters:
+      batch_size: 1000
+  - step: 3
+    name: "Pre-warm top 100 hot product and auth keys"
+    action: "prewarm_cache"
+    target: "cache_instance"
+  - step: 4
+    name: "Verify cache hit ratio recovery > 80% without DB overload"
+    action: "verify_metric"
+    metric: "cache_hit_ratio"
+    target_value: "> 80.0"
+rollback_steps:
+  - step: 1
+    name: "Restore hot keys snapshot into memory"
+    action: "restore_snapshot"
+    target: "cache_instance"
